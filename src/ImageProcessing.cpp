@@ -297,6 +297,13 @@ cv::Mat dynamicContrast(
 cv::Mat rotateImage(
     const cv::Mat& image,
     double angle)
+//Black-filled output: Output starts all black, so anything never overwritten stays black
+//Precomputed cosine/sine: computed once outside the loop since they don't change per pixel.
+//Center-relative shift: Rotation happens around the center, not the corner, so coordinates get shifted first.
+//Inverse rotation matrix: For every output pixel, this asks 'where did this come from in the original?
+//std::round to nearest pixel: Nearest-neighbor interpolation, snap to the closest source pixel, no blending.
+//Bounds check + continue: If the source falls outside the image, skip it and leave that pixel black.
+//Direct pixel copy: Copy of the BGR value from source to destination.
 {
     validateImage(
         image,
