@@ -128,6 +128,13 @@ cv::Mat dynamicContrast(
     const cv::Mat& image,
     int low_percentile,
     int high_percentile)
+//Percentile validation: Low has to be less than high, or the stretch would run backwards.
+//Histogram build: One pass over the image counting how many pixels have each brightness value, per channel.
+//Percentile-to-pixel-count conversion: This turns 1% into an actual pixel count.
+//Low/high value scan: Walks the histogram accumulating a running total until it crosses the target count, black & White point
+//Degenerate fallback Solid-color image safety net, otherwise it divides by 0."
+//Linear stretch formula: Everything below black point clips to 0, above white point clips to 255, everything between gets rescaled to fill the full range.
+//Per-channel tables: Each channel gets its own black/white point from its own histogram, so they stretch independently.
 {
     validateImage(
         image,
