@@ -16,11 +16,17 @@ struct ProcessingState {
     bool rotation_enabled{false};
     double rotation_angle{0.0};
 };
-
 cv::Mat processFrame(
     const cv::Mat& frame,
     const photo_booth::ProcessingConfig& config,
     const ProcessingState& state)
+//frame.clone(): Works on a copy so the raw camera frame is never touched.
+//Channel swap if: Only runs if the config file has it enabled
+//Contrast stretch, no if: This is the only operation that runs on literally every frame.
+//Invert/quantize/rotate ifs: Each one checks a live runtime flag the user just toggled with a key.
+//Chained reassignment: Each line reassigns the frame variable, so every step processes the output of the step before it.
+//Why quantize-after-contrast: Quantizing already-stretched values gives more distinct bands than quantizing the raw camera output would.
+//Why rotate is last: Nothing runs after it, so its black-corner fill never gets processed by anything else.
 {
     cv::Mat processed_frame =
         frame.clone();
@@ -62,6 +68,9 @@ void showPreviewFrame(
     const cv::Mat& frame,
     const photo_booth::PreviewConfig& config,
     const ProcessingState& state)
+//Display rotate/mirror: "This changes what's shown on screen, not the actual processed image data."
+//Control legend text: "Static reminder of the keys, drawn every frame regardless of state."
+//Live status line: "Rebuilds a string each frame showing ON/OFF for quantize, rotate, and invert based on current state."
 {
     cv::Mat preview_frame =
         frame.clone();
@@ -152,6 +161,12 @@ void showPreviewFrame(
 bool handleKey(
     const int key,
     ProcessingState& state)
+//Quit case (27/q/Q): Returns false, which is the signal for main's loop to stop.
+//Boolean toggle lines (i, n, r): flips true to false or back.
+//] doubling: Doubles the level count, clamped at 256 so it can't exceed what 8 bits can represent.
+//[ halving: Integer division halves it, floored, stopping at 2 so it never goes below a usable minimum.
+//</> angle adjust: Five degrees per press, clamped to plus-or-minus 180 so it never wraps into redundant angles.
+//default: break;: Any key we don't recognize is just ignored.
 {
     switch (key) {
     case 27:
