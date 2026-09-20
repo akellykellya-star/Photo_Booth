@@ -121,7 +121,9 @@ bool ImageCapture::isOpen() const {
 
 bool ImageCapture::read() {
   clearError();
-
+//Local next_image variable: Reads into a temporary first so a failed read can never corrupt the last good frame.
+//CV_8UC3 check here too: If the camera hands back anything else, it's rejected right here.
+//std::move into image_: Moves instead of copies, avoids duplicating the pixel buffer.
   if (!isOpen()) {
     setError("Cannot capture an image because the camera is not open.");
     clearImage();
@@ -250,6 +252,8 @@ std::uint64_t ImageCapture::frameNumber() const noexcept {
 void ImageCapture::applyConfiguration() {
   // FOURCC is applied before dimensions and frame rate because some
   // camera backends expose different modes for different pixel formats.
+  //Conditional property sets (if width > 0, etc.): Zero means leave the camera's default alone]
+  //CAP_PROP_CONVERT_RGB forced on: This is what actually guarantees BGR output.
   if (!configuration_.fourcc.empty()) {
     capture_.set(cv::CAP_PROP_FOURCC,
                  static_cast<double>(fourccFromString(configuration_.fourcc)));
