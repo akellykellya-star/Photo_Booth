@@ -7,7 +7,7 @@
 #include "photo_booth/AppConfig.hpp"
 #include "photo_booth/ImageCapture.hpp"
 #include "photo_booth/ImageProcessing.hpp"
-
+ 
 namespace {
 struct ProcessingState {
     bool inversion_enabled{false};
@@ -16,40 +16,34 @@ struct ProcessingState {
     bool rotation_enabled{false};
     double rotation_angle{0.0};
 };
+ 
 cv::Mat processFrame(
     const cv::Mat& frame,
     const photo_booth::ProcessingConfig& config,
     const ProcessingState& state)
-//frame.clone(): Works on a copy so the raw camera frame is never touched.
-//Channel swap if: Only runs if the config file has it enabled
-//Contrast stretch, no if: This is the only operation that runs on literally every frame.
-//Invert/quantize/rotate ifs: Each one checks a live runtime flag the user just toggled with a key.
-//Chained reassignment: Each line reassigns the frame variable, so every step processes the output of the step before it.
-//Why quantize-after-contrast: Quantizing already-stretched values gives more distinct bands than quantizing the raw camera output would.
-//Why rotate is last: Nothing runs after it, so its black-corner fill never gets processed by anything else.
 {
     cv::Mat processed_frame =
         frame.clone();
-
+ 
     if (config.channel_swap_enabled) {
         processed_frame =
             photo_booth::swapRedBlueChannels(
                 processed_frame);
     }
-
+ 
     processed_frame =
         photo_booth::dynamicContrast(
             processed_frame,
             1,
             99);
-
+ 
     if (state.inversion_enabled) {
         processed_frame =
             photo_booth::invertImage(
                 processed_frame);
     }
     if (state.quantization_enabled) {
-
+ 
         processed_frame =
             photo_booth::quantizeImage(
                 processed_frame,
@@ -63,36 +57,33 @@ cv::Mat processFrame(
     }
     return processed_frame;
 }
-
+ 
 void showPreviewFrame(
     const cv::Mat& frame,
     const photo_booth::PreviewConfig& config,
     const ProcessingState& state)
-//Display rotate/mirror: "This changes what's shown on screen, not the actual processed image data."
-//Control legend text: "Static reminder of the keys, drawn every frame regardless of state."
-//Live status line: "Rebuilds a string each frame showing ON/OFF for quantize, rotate, and invert based on current state."
 {
     cv::Mat preview_frame =
         frame.clone();
-
+ 
     switch (config.rotation) {
     case 0:
         break;
-
+ 
     case 90:
         cv::rotate(
             preview_frame,
             preview_frame,
             cv::ROTATE_90_CLOCKWISE);
         break;
-
+ 
     case 180:
         cv::rotate(
             preview_frame,
             preview_frame,
             cv::ROTATE_180);
         break;
-
+ 
     case 270:
         cv::rotate(
             preview_frame,
@@ -100,14 +91,14 @@ void showPreviewFrame(
             cv::ROTATE_90_COUNTERCLOCKWISE);
         break;
     }
-
+ 
     if (config.mirror) {
         cv::flip(
             preview_frame,
             preview_frame,
             1);
     }
-
+ 
     /*
      * Display the available Week 5 controls.
      */
@@ -119,7 +110,7 @@ void showPreviewFrame(
         0.55,
         cv::Scalar(255, 255, 255),
         1);
-
+ 
     /*
      * Display the current processing state.
      */
@@ -129,21 +120,21 @@ void showPreviewFrame(
             state.quantization_enabled
                 ? "ON"
                 : "OFF");
-
+ 
     status +=
         "   Rotation: " +
         std::string(
             state.rotation_enabled
                 ? "ON"
                 : "OFF");
-
+ 
     status +=
         "   Invert: " +
         std::string(
             state.inversion_enabled
                 ? "ON"
                 : "OFF");
-
+ 
     cv::putText(
         preview_frame,
         status,
@@ -152,21 +143,15 @@ void showPreviewFrame(
         0.55,
         cv::Scalar(255, 255, 255),
         1);
-
+ 
     cv::imshow(
         config.window_name,
         preview_frame);
 }
-
+ 
 bool handleKey(
     const int key,
     ProcessingState& state)
-//Quit case (27/q/Q): Returns false, which is the signal for main's loop to stop.
-//Boolean toggle lines (i, n, r): flips true to false or back.
-//] doubling: Doubles the level count, clamped at 256 so it can't exceed what 8 bits can represent.
-//[ halving: Integer division halves it, floored, stopping at 2 so it never goes below a usable minimum.
-//</> angle adjust: Five degrees per press, clamped to plus-or-minus 180 so it never wraps into redundant angles.
-//default: break;: Any key we don't recognize is just ignored.
 {
     switch (key) {
     case 27:
@@ -183,7 +168,7 @@ bool handleKey(
                     ? "ON"
                     : "OFF")
             << '\n';
-
+ 
         break;
     case 'n':
     case 'N':
@@ -221,7 +206,7 @@ bool handleKey(
             << "Quantization levels: "
             << state.quantization_levels
             << '\n';
-
+ 
         break;
     case 'r':
     case 'R':
@@ -237,7 +222,7 @@ bool handleKey(
             << " degrees)"
             << '\n';
         break;
-
+ 
     case '<':
         state.rotation_angle -= 5.0;
         if (state.rotation_angle < -180.0) {
@@ -266,7 +251,7 @@ bool handleKey(
     return true;
 }
 }
-
+ 
 int main(
     int argc,
     char* argv[])
@@ -296,30 +281,45 @@ int main(
             }
             config_path = argument;
         }
-
+ 
         const auto config =
             photo_booth::loadConfig(
                 config_path);
-
-        photo_booth::ImageCapture camera(
+ 
+        auto capture_config =
             photo_booth::makeImageCaptureConfiguration(
-                config.camera));
-        if (!camera.open()) {
+                config.camera);
+        photo_booth::ImageCapture camera(capture_config);
+ 
+        bool camera_opened = false;
+        const int configured_device = capture_config.device_index;
+ 
+        for (int device = configured_device;
+             device < configured_device + 3;
+             ++device) {
+            capture_config.device_index = device;
+            if (camera.open(capture_config)) {
+                camera_opened = true;
+                break;
+            }
+        }
+ 
+        if (!camera_opened) {
             std::cerr
                 << camera.errorMessage()
                 << '\n';
             return EXIT_FAILURE;
         }
-
+ 
         std::cout
             << camera
             << '\n';
-
+ 
         cv::namedWindow(
             config.preview.window_name,
             cv::WINDOW_AUTOSIZE);
         ProcessingState processing_state;
-
+ 
         while (true) {
             if (!camera.read()) {
                 std::cerr
@@ -327,21 +327,21 @@ int main(
                     << '\n';
                 return EXIT_FAILURE;
             }
-
+ 
             cv::Mat processed_frame =
                 processFrame(
                     camera.image(),
                     config.processing,
                     processing_state);
-
+ 
            showPreviewFrame(
             processed_frame,
             config.preview,
             processing_state);
-
+ 
             const int key =
             cv::waitKeyEx(1);
-
+ 
         if (key != -1) {
             std::cout
             << "Key received: "
@@ -372,3 +372,4 @@ int main(
     }
     return EXIT_SUCCESS;
 }
+ 
