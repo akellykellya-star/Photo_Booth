@@ -25,6 +25,7 @@ void validateImage(
 
 cv::Mat swapRedBlueChannels(
     const cv::Mat& image)
+//This isn't real color conversion, it's a byte reorder, so on a BGR image it just swaps red and blue.
 {
     validateImage(
         image,
